@@ -12,6 +12,9 @@ tmStart = time.time()
 # for pop-up window
 parent = iface.mainWindow()
 
+da = QgsDistanceArea()
+da.setEllipsoid('WGS84')
+
 # Layers - from Natural Earth website (
 layers = QgsProject.instance().mapLayersByName("Countries")
 if len(layers) > 0:
@@ -35,14 +38,20 @@ if len(layers) > 0:
             if len(layers) > 0:
                 cities = layers[0]
                 if cities.isValid():
-                    sStr = ""
+                    lIds = []
+                    sStr = f"Area of  {sCntry} = {round(da.measureArea(geomCntry)/1000/1000,3)}\n\n"
+                    sStr += f"Perimeter of  {sCntry} = {round(da.measurePerimeter(geomCntry)/1000,3)}\n\n"
                     request = QgsFeatureRequest()
                     popClause = QgsFeatureRequest.OrderByClause("POP_MAX", ascending=False)
                     orderby = QgsFeatureRequest.OrderBy([popClause])
                     request.setOrderBy(orderby)
                     for city in cities.getFeatures(request):
                         if city.geometry().within(geomCntry):
-                            sStr += "{0:15} {1:10}\n".format(city['NAME'], city['POP_MAX'])
+                            lIds.append(city.id())
+                            cityLat = city.geometry().get().y()
+                            cityLng = city.geometry().get().x()
+                            dDist = da.measureLine([QgsPointXY(cityLng, cityLat), QgsPointXY(69.385, 34.45)])/1000
+                            sStr += "{0:15}{1:10}{2:15.3f}\n".format(city['NAME'], city['POP_MAX'], dDist)
                 else:
                     print("'Cities' is not a valid layer")
             else:
@@ -56,5 +65,9 @@ else:
 
 if bOk:
     tmEnd = time.time()
+    cities.selectByIds(lIds)
+    iface.mapCanvas().zoomToSelected()
+    if iface.mapCanvas().scale<50000000:
+        iface.mapCanvas().zoomScale(50000000)
     sStr = f"Run time = {round((tmEnd - tmStart), 3)} seconds\n\n" + sStr
     QMessageBox.information(parent, f"Cities in {sCntry}", sStr)
